@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from .models import Project
 from .serializers import ProjectSerializer
-
+from rest_framework import status
 
 
 
@@ -26,8 +26,8 @@ def createproject(request):
     serializers=ProjectSerializer(data=request.data)
     if serializers.is_valid():
         serializers.save()
-        return Response(serializers.data)
-    return Response(serializers.errors)
+        return Response(serializers.data, status=status.HTTP_201_CREATED)
+    return Response(serializers.errors, status=status.HTTP_400_BAD_REQUEST )
 
 @api_view(['PUT'])
 @permission_classes([IsAuthenticatedOrReadOnly])
@@ -36,8 +36,8 @@ def updateproject(request, pk):
     serializers = ProjectSerializer(project, data=request.data)
     if serializers.is_valid():
         serializers.save()
-        return Response(serializers.data)
-    return Response(serializers.errors)
+        return Response(serializers.data, status=status.HTTP_201_CREATED)
+    return Response(serializers.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticatedOrReadOnly])
