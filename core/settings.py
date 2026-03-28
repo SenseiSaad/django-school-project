@@ -9,26 +9,34 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+import os
+from dotenv import load_dotenv
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file (assuming it's named DATA.env and placed in the parent directory of BASE_DIR)
+dotenv_path = BASE_DIR.parent / 'DATA.env'
+load_dotenv(dotenv_path)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-fxkxuh@j0f2)#)1p+sk+-@&1fsv!_c6hmsg)vm$0yi&ia9ksgy'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fxkxuh@j0f2)#)1p+sk+-@&1fsv!_c6hmsg)vm$0yi&ia9ksgy')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
-
-# Application definition
+#'.elasticbeanstalk.com', 
+ #   'slancer.site', 
+#    'localhost', 
+  #  '127.0.0.1'
+#
+## Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -44,6 +52,7 @@ INSTALLED_APPS = [
     'blogs',
     'contacts',
     'corsheaders',
+    'storages',
 ]
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -56,6 +65,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -64,10 +74,14 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'core.urls'
 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -83,18 +97,40 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    'https://slancer.site',
+    'http://slancer.site',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+]
 
+# HTTPS Logic for Load Balancer / CloudFront
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# INTERVIEW NOTE: We dynamically select the database engine based on the presence of the 'DB_HOST' variable.
+# If 'DB_HOST' is defined in the .env file, we default to PostgreSQL (used in AWS RDS/production).
+# Otherwise, we fallback to SQLite for local development reducing the setup friction for new devs.
+if os.getenv('DB_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'postgres'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / os.getenv('DB_NAME', 'db.sqlite3'),
+        }
+    }
 
 
 # Password validation
@@ -132,3 +168,25 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# AWS S3 Settings
+# Checking 'AWS_STORAGE_BUCKET_NAME' helps us intelligently fallback to local media storage locally 
+# while ensuring S3 is used in production (whether via env credentials or attached IAM roles).
+if os.getenv('AWS_STORAGE_BUCKET_NAME'):
+    # If using IAM Roles on Elastic Beanstalk, these could be empty but Boto3 will handle it via role
+    if os.getenv('AWS_ACCESS_KEY_ID'):
+        AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+        
+    AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME').replace('https://s3.amazonaws.com/', '') if os.getenv('AWS_STORAGE_BUCKET_NAME') else ''
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    
+    # Static and Media storages
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
+

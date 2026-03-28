@@ -6,8 +6,8 @@ class Contact(models.Model):
     email=models.EmailField()
     message=models.TextField()
     received_at=models.DateTimeField(auto_now_add=True)
-
-
+    is_read = models.BooleanField(default=False)
 
     def __str__(self):
+        return f"{self.name} - {self.email}"
         return f"message from {self.name}"

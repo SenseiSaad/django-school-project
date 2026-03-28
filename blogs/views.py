@@ -5,12 +5,17 @@ from .models import Contact
 from .serializers import ContactSerializer
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
 def oneBlog(request, pk):
-    contact = Contact.objects.get(id=pk)
+    try:
+        contact = Contact.objects.get(id=pk)
+    except Contact.DoesNotExist:
+        return Response({'error': 'Blog not found'}, status=404)
     serializer = ContactSerializer(contact)
     return Response(serializer.data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
 def allBlogs(request):
     contacts = Contact.objects.all()
     serializer = ContactSerializer(contacts, many=True)

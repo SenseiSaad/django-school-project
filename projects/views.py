@@ -8,12 +8,17 @@ from rest_framework import status
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
 def oneproject(request, pk):
-    project = Project.objects.get(id=pk)
+    try:
+        project = Project.objects.get(id=pk)
+    except Project.DoesNotExist:
+        return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
     serializer = ProjectSerializer(project)
     return Response(serializer.data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
 def allprojects(request):
     projects = Project.objects.all()
     serializer = ProjectSerializer(projects, many=True)
